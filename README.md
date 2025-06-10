@@ -20,7 +20,7 @@ https://you-sk.github.io/web-fusen-gemini/
 ## 🛠️ 使い方
 
 1.  このリポジトリをクローンまたはダウンロードします。
-2.  `index.html` ファイルをブラウザで開くだけですぐに使用できます。
+2.  `index.html`、`style.css`、`script.js` を同じディレクトリに配置し、`index.html` をブラウザで開きます。
 
 ## 💻 使用技術
 

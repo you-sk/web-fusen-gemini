@@ -1,0 +1,138 @@
+/* 基本のスタイル設定 */
+body {
+    font-family: 'Noto Sans JP', 'Inter', sans-serif;
+    background-color: #f0f4f8;
+    color: #1a202c;
+    overflow: hidden;
+    user-select: none;
+}
+/* 付箋のスタイル */
+.sticky-note {
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s ease-in-out, background-color 0.2s, left 0.2s ease-out, top 0.2s ease-out;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+.sticky-note.is-dragging {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    transition: none; /* ドラッグ中はアニメーションを無効化 */
+}
+/* 付箋のヘッダー */
+.note-header {
+    cursor: grab;
+    padding: 8px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+    background-color: rgba(0,0,0,0.05);
+    flex-shrink: 0;
+}
+.is-dragging .note-header, .is-dragging {
+     cursor: grabbing;
+}
+/* 付箋のコンテンツエリア */
+.note-content-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    padding-bottom: 8px;
+    overflow: hidden;
+}
+/* 付箋のテキストエリア */
+.note-textarea {
+    flex-grow: 1;
+    background-color: transparent;
+    border: none;
+    resize: none;
+    outline: none;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: inherit;
+    user-select: text; 
+}
+/* 最終更新日時 */
+.note-timestamp {
+    font-size: 0.75rem;
+    color: rgba(0,0,0,0.5);
+    text-align: right;
+    padding-top: 4px;
+    flex-shrink: 0;
+}
+/* 色選択パレット */
+.color-palette {
+    position: absolute;
+    top: 40px;
+    right: 0px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    z-index: 20;
+    display: none;
+}
+.color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+}
+/* UIコントロールボタン */
+#controls {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    display: flex;
+    gap: 0.75rem;
+    z-index: 50;
+}
+.control-btn {
+    background-color: #ffffff;
+    color: #374151;
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+    border-radius: 9999px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.2s ease-in-out;
+}
+.control-btn:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px);
+}
+/* インポートボタン用の非表示ファイル入力 */
+#import-file {
+    display: none;
+}
+/* 確認モーダル */
+#confirm-modal {
+    display: none; 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+#confirm-modal-content {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+    text-align: center;
+    max-width: 400px;
+}
