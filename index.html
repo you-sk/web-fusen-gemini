@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高機能付箋メモアプリ (スタンドアロン版)</title>
+    <!-- Tailwind CSSの読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- フォントとアイコンの読み込み -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 基本のスタイル設定 */
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #1a202c;
+            overflow: hidden;
+            user-select: none;
+        }
+        /* 付箋のスタイル */
+        .sticky-note {
+            position: absolute;
+            width: 250px;
+            height: 250px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.2s ease-in-out, background-color 0.2s, left 0.2s ease-out, top 0.2s ease-out;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .sticky-note.is-dragging {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            transition: none; /* ドラッグ中はアニメーションを無効化 */
+        }
+        /* 付箋のヘッダー */
+        .note-header {
+            cursor: grab;
+            padding: 8px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            background-color: rgba(0,0,0,0.05);
+            flex-shrink: 0;
+        }
+        .is-dragging .note-header, .is-dragging {
+             cursor: grabbing;
+        }
+        /* 付箋のコンテンツエリア */
+        .note-content-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            padding-bottom: 8px;
+            overflow: hidden;
+        }
+        /* 付箋のテキストエリア */
+        .note-textarea {
+            flex-grow: 1;
+            background-color: transparent;
+            border: none;
+            resize: none;
+            outline: none;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: inherit;
+            user-select: text; 
+        }
+        /* 最終更新日時 */
+        .note-timestamp {
+            font-size: 0.75rem;
+            color: rgba(0,0,0,0.5);
+            text-align: right;
+            padding-top: 4px;
+            flex-shrink: 0;
+        }
+        /* 色選択パレット */
+        .color-palette {
+            position: absolute;
+            top: 40px;
+            right: 0px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 8px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            z-index: 20;
+            display: none;
+        }
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+        }
+        /* UIコントロールボタン */
+        #controls {
+            position: fixed;
+            top: 1.25rem;
+            right: 1.25rem;
+            display: flex;
+            gap: 0.75rem;
+            z-index: 50;
+        }
+        .control-btn {
+            background-color: #ffffff;
+            color: #374151;
+            font-weight: 600;
+            padding: 0.75rem 1.25rem;
+            border-radius: 9999px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s ease-in-out;
+        }
+        .control-btn:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+        }
+        /* インポートボタン用の非表示ファイル入力 */
+        #import-file {
+            display: none;
+        }
+        /* 確認モーダル */
+        #confirm-modal {
+            display: none; 
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        #confirm-modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            text-align: center;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div id="app" class="w-full h-screen relative">
+        </div>
+
+    <div id="controls">
+        <button id="add-note-btn" class="control-btn bg-blue-500 text-white hover:bg-blue-600">
+            <i class="fas fa-plus mr-2"></i>付箋を追加
+        </button>
+        <button id="export-btn" class="control-btn bg-green-500 text-white hover:bg-green-600">
+            <i class="fas fa-file-export mr-2"></i>エクスポート
+        </button>
+        <label for="import-file" id="import-btn-label" class="control-btn bg-purple-500 text-white hover:bg-purple-600 cursor-pointer">
+            <i class="fas fa-file-import mr-2"></i>インポート
+        </label>
+        <input type="file" id="import-file" accept=".json">
+    </div>
+
+    <div id="confirm-modal">
+        <div id="confirm-modal-content">
+            <h2 class="text-xl font-bold mb-4">本当にインポートしますか？</h2>
+            <p class="mb-6">現在の付箋はすべて削除され、ファイルの内容に置き換えられます。この操作は元に戻せません。</p>
+            <div class="flex justify-center gap-4">
+                <button id="confirm-import-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded">はい、インポートします</button>
+                <button id="cancel-import-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- グローバル変数と設定 ---
+        const notesContainer = document.getElementById('app');
+        const addNoteBtn = document.getElementById('add-note-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const importFile = document.getElementById('import-file');
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmImportBtn = document.getElementById('confirm-import-btn');
+        const cancelImportBtn = document.getElementById('cancel-import-btn');
+
+        const LOCAL_STORAGE_KEY = 'stickyNotesApp.notes';
+        let notes = {};
+        let notesDataForImport = null;
+        let zIndexCounter = 1; // Z-indexを管理するためのカウンター
+        const NOTE_WIDTH = 250;
+        const NOTE_HEIGHT = 250;
+
+        const colors = [
+            'bg-yellow-200', 'bg-green-200', 'bg-blue-200', 
+            'bg-pink-200', 'bg-purple-200', 'bg-indigo-200', 'bg-red-200', 'bg-gray-200'
+        ];
+
+        // --- データ永続化 ---
+        function loadNotesFromLocalStorage() {
+            const savedNotes = localStorage.getItem(LOCAL_STORAGE_KEY);
+            return savedNotes ? JSON.parse(savedNotes) : {};
+        }
+
+        function saveNotesToLocalStorage() {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(notes));
+        }
+        
+        // --- DOM操作 & 状態更新 ---
+        function renderAllNotes() {
+            zIndexCounter = 1; 
+            notesContainer.innerHTML = '';
+            // updatedAtが古い順にソートして、z-indexを正しく積み上げる
+            Object.values(notes)
+                .sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt))
+                .forEach(note => {
+                    const existingEl = document.getElementById(note.id);
+                    if (existingEl) {
+                        notesContainer.removeChild(existingEl);
+                    }
+                    createNoteElement(note);
+                });
+        }
+
+        function createNoteElement(note) {
+            if (document.getElementById(note.id)) return;
+            const noteEl = document.createElement('div');
+            noteEl.id = note.id;
+            noteEl.className = `sticky-note ${note.color || 'bg-yellow-200'}`;
+            noteEl.style.left = `${note.position.x}px`;
+            noteEl.style.top = `${note.position.y}px`;
+            noteEl.style.zIndex = zIndexCounter++; 
+
+            const header = document.createElement('div');
+            header.className = 'note-header';
+            
+            const contentArea = document.createElement('div');
+            contentArea.className = 'note-content-area';
+
+            noteEl.addEventListener('mousedown', () => bringToFront(noteEl), false);
+
+            const colorButton = document.createElement('button');
+            colorButton.className = 'text-gray-500 hover:text-black transition-colors';
+            colorButton.innerHTML = '<i class="fas fa-palette"></i>';
+            const colorPalette = createColorPalette(note.id);
+            const paletteWrapper = document.createElement('div');
+            paletteWrapper.className = 'relative';
+            paletteWrapper.appendChild(colorButton);
+            paletteWrapper.appendChild(colorPalette);
+            colorButton.onclick = (e) => { e.stopPropagation(); colorPalette.style.display = colorPalette.style.display === 'grid' ? 'none' : 'grid'; };
+            document.addEventListener('click', (e) => { if (!paletteWrapper.contains(e.target)) { colorPalette.style.display = 'none'; } });
+            
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'text-gray-500 hover:text-red-500 transition-colors';
+            deleteButton.innerHTML = '<i class="fas fa-times"></i>';
+            deleteButton.onclick = (e) => { e.stopPropagation(); deleteNote(note.id); };
+            
+            const buttonsWrapper = document.createElement('div');
+            buttonsWrapper.className = 'flex items-center space-x-2';
+            buttonsWrapper.appendChild(paletteWrapper);
+            buttonsWrapper.appendChild(deleteButton);
+            
+            const textarea = document.createElement('textarea');
+            textarea.className = 'note-textarea';
+            textarea.value = note.content || '';
+            textarea.placeholder = 'メモを入力...';
+            textarea.addEventListener('blur', () => { updateNote(note.id, { content: textarea.value }); });
+            
+            const timestampEl = document.createElement('div');
+            timestampEl.className = 'note-timestamp';
+            timestampEl.textContent = formatTimestamp(note.updatedAt);
+            
+            header.appendChild(buttonsWrapper);
+            contentArea.appendChild(textarea);
+            contentArea.appendChild(timestampEl);
+            noteEl.appendChild(header);
+            noteEl.appendChild(contentArea);
+            notesContainer.appendChild(noteEl);
+            makeDraggable(noteEl, header);
+        }
+        
+        function updateNoteElement(note) {
+            const noteEl = document.getElementById(note.id);
+            if (!noteEl) return;
+            noteEl.style.left = `${note.position.x}px`;
+            noteEl.style.top = `${note.position.y}px`;
+            noteEl.className = `sticky-note ${note.color}`;
+            const textarea = noteEl.querySelector('.note-textarea');
+            if (document.activeElement !== textarea) { textarea.value = note.content; }
+            const timestampEl = noteEl.querySelector('.note-timestamp');
+            timestampEl.textContent = formatTimestamp(note.updatedAt);
+        }
+
+        function createColorPalette(noteId) {
+            const palette = document.createElement('div');
+            palette.className = 'color-palette';
+            colors.forEach(color => {
+                const swatch = document.createElement('div');
+                swatch.className = `color-swatch ${color}`;
+                swatch.onclick = (e) => { e.stopPropagation(); updateNote(noteId, { color: color }); };
+                palette.appendChild(swatch);
+            });
+            return palette;
+        }
+
+        // --- アプリケーションロジック ---
+        function addNewNote() {
+            const newId = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            const containerRect = notesContainer.getBoundingClientRect();
+            const randomX = Math.floor(Math.random() * (containerRect.width - NOTE_WIDTH));
+            const randomY = Math.floor(Math.random() * (containerRect.height - NOTE_HEIGHT));
+            const newNote = { id: newId, content: '', position: { x: randomX, y: randomY }, color: randomColor, createdAt: now, updatedAt: now };
+            notes[newId] = newNote;
+            createNoteElement(newNote); 
+            saveNotesToLocalStorage();
+        }
+
+        // ★★★ 修正点: 更新ロジックを分離 ★★★
+        function updateNote(id, data) {
+            if (!notes[id]) return;
+            
+            const originalNote = notes[id];
+            const updatedNote = { ...originalNote, ...data };
+            
+            // テキストコンテンツが実際に変更された場合のみ、更新日時を更新
+            if (data.hasOwnProperty('content') && originalNote.content !== updatedNote.content) {
+                updatedNote.updatedAt = new Date().toISOString();
+            } else if (data.hasOwnProperty('color') || data.hasOwnProperty('position')) {
+                 // 色や位置の変更では更新日時を変更しない
+            }
+
+            notes[id] = updatedNote;
+            updateNoteElement(updatedNote);
+            saveNotesToLocalStorage();
+        }
+        
+        function bringToFront(element) {
+            if (!element) return;
+            element.style.zIndex = ++zIndexCounter;
+            saveNotesToLocalStorage();
+        }
+
+        function deleteNote(id) {
+            const noteEl = document.getElementById(id);
+            if (noteEl) noteEl.remove();
+            delete notes[id];
+            saveNotesToLocalStorage();
+        }
+
+        // --- ドラッグ＆ドロップ ---
+        function makeDraggable(element, header) {
+            const onMouseDown = (e) => {
+                if (!header.contains(e.target)) return;
+                e.preventDefault();
+                
+                bringToFront(element);
+                element.classList.add('is-dragging');
+                const containerRect = notesContainer.getBoundingClientRect();
+
+                const offsetX = e.clientX - element.offsetLeft;
+                const offsetY = e.clientY - element.offsetTop;
+                
+                const onMouseMove = (moveEvent) => {
+                    let newX = moveEvent.clientX - offsetX;
+                    let newY = moveEvent.clientY - offsetY;
+                    
+                    newX = Math.max(0, Math.min(newX, containerRect.width - NOTE_WIDTH));
+                    newY = Math.max(0, Math.min(newY, containerRect.height - NOTE_HEIGHT));
+                    
+                    element.style.left = `${newX}px`;
+                    element.style.top = `${newY}px`;
+                };
+
+                const onMouseUp = (upEvent) => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    
+                    element.classList.remove('is-dragging');
+
+                    if (upEvent.clientX === e.clientX && upEvent.clientY === e.clientY) {
+                        return;
+                    }
+
+                    updateNote(element.id, { position: { x: parseInt(element.style.left), y: parseInt(element.style.top) } });
+                };
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            };
+            
+            header.addEventListener('mousedown', onMouseDown);
+        }
+
+        // --- ユーティリティ ---
+        function formatTimestamp(isoString) {
+            if (!isoString) return '...'; const date = new Date(isoString);
+            return `${date.getFullYear()}/${('0' + (date.getMonth() + 1)).slice(-2)}/${('0' + date.getDate()).slice(-2)} ${('0' + date.getHours()).slice(-2)}:${('0' + date.getMinutes()).slice(-2)}`;
+        }
+        
+        function adjustNotePosition(note) {
+            const containerRect = notesContainer.getBoundingClientRect();
+            let changed = false;
+            if (note.position.x > containerRect.width - NOTE_WIDTH) {
+                note.position.x = containerRect.width - NOTE_WIDTH - 20; changed = true;
+            } else if (note.position.x < 0) {
+                note.position.x = 20; changed = true;
+            }
+            if (note.position.y > containerRect.height - NOTE_HEIGHT) {
+                note.position.y = containerRect.height - NOTE_HEIGHT - 20; changed = true;
+            } else if (note.position.y < 0) {
+                note.position.y = 20; changed = true;
+            }
+            return changed;
+        }
+
+        function handleResize() {
+            let needsUpdate = false;
+            Object.values(notes).forEach(note => {
+                if (adjustNotePosition(note)) { needsUpdate = true; }
+            });
+            if (needsUpdate) {
+                renderAllNotes();
+                saveNotesToLocalStorage();
+            }
+        }
+        
+        // --- インポート/エクスポート ---
+        function exportNotes() {
+            const dataStr = JSON.stringify(Object.values(notes), null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `stickynotes-backup-${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+        
+        function hideImportModal() {
+            notesDataForImport = null;
+            importFile.value = '';
+            confirmModal.style.display = 'none';
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedData)) throw new Error('Invalid JSON format');
+                    notesDataForImport = importedData;
+                    confirmModal.style.display = 'flex';
+                } catch (err) {
+                    console.error("Import file read failed:", err);
+                    alert('ファイルの読み込みに失敗しました。有効なJSONファイルを選択してください。');
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        function performImport(notesToImport) {
+            const newNotes = {};
+            notesToImport.forEach(note => {
+                const id = note.id || crypto.randomUUID();
+                adjustNotePosition(note);
+                newNotes[id] = { ...note, id };
+            });
+            notes = newNotes;
+            renderAllNotes();
+            saveNotesToLocalStorage();
+        }
+
+        // --- 初期化処理 ---
+        function initialize() {
+            addNoteBtn.addEventListener('click', addNewNote);
+            exportBtn.addEventListener('click', exportNotes);
+            importFile.addEventListener('change', handleFileSelect);
+            confirmImportBtn.addEventListener('click', () => {
+                if (notesDataForImport) performImport(notesDataForImport);
+                hideImportModal();
+            });
+            cancelImportBtn.addEventListener('click', hideImportModal);
+
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(handleResize, 100);
+            });
+
+            importFile.value = '';
+            notes = loadNotesFromLocalStorage();
+            renderAllNotes();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialize);
+        } else {
+            initialize();
+        }
+
+    </script>
+</body>
+</html>
